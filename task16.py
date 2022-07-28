@@ -11,7 +11,7 @@ class Packet():
         self.packet_version = version 
 
     @staticmethod
-    def check_packet_type(packet):
+    def get_packet_info(packet):
         '''Checks packet type and returns it.
         Args:
             packet: packet to check
@@ -19,21 +19,23 @@ class Packet():
             Integer.
         '''
 
-        return int(packet[3:6], 2)
+        packet_version, packet_type = int(packet[:3], 2), int(packet[3:6], 2)
+        return packet_version, packet_type
+    
 
 class LiteralPacket(Packet):
     '''Packet that contain literal data.'''
     
     raw_data = None
-    data = None
+    data = None    
     length = None
 
     def __init__(self, version, data):
         super().__init__(version)
         self.raw_data = data
-        self.read_data(data)
+        self.read_data()
 
-    def read_data(self, packet):
+    def read_data(self):
         '''Reads literal.
         Args:
             packet: string of bits.
@@ -41,63 +43,84 @@ class LiteralPacket(Packet):
             Integer.
         '''
         first_bit = 1
+        group_length = 5
         i = 0
-        numbers = ''
+        digits = ''
         while first_bit != 0:
-            number_part = packet[i:i+5]
-            first_bit = int(number_part[0])
-            number = number_part[1:]
-            numbers += number
-            i += 5
-        data_length = len(numbers) + len(numbers) % 4
+            bit_group = self.raw_data[i:i + group_length]
+            first_bit = int(bit_group[0])
+            digit_bits = bit_group[1:]
+            digits += digit_bits
+            i += group_length
+
+        data_length = i
         
         self.length = data_length
-        self.data = int(numbers, 2)
+        self.data = int(digits, 2)
+
+        if self.length < len(self.raw_data):
+            self.raw_data = self.raw_data[:self.length]
 
     def __str__(self):
         return 'Literal packet\nversion: {0:2}\nraw_data: {1}\ndata: {2:8}\nlength: {3:4}\n'.format(self.packet_version, self.raw_data, self.data, self.length)
 
-def decapsulate_packet(first_packet):
-    '''Extract all packets from first packet and return them in dictionary.
+class OperatorPacket(Packet):
+    '''Packet that encapsulates other packets.'''
+    
+    packet_type = None
+    raw_data = None
+    packets = []
+    length_type = None
+    length = None
+
+    def __init__(self, version, packet_type, length_type, length, packet):
+        super().__init__(version)
+        self.packet_type = packet_type
+        self.raw_data = packet
+        self.length_type = length_type
+        self.length = length
+    
+    def read_packets(self):
+        '''Reads packets and store them in the list.
+
+        Args:
+            packet: string of bits.
+        '''
+        
+        packet_version, packet_type = get_packet_info(self.raw_data)
+        
+        if packet_type == 4:
+            if self.length_type == 0:
+                length_left = self.length
+                while length_left > 0:
+                    new_packet = LiteralPacket(packet_version, self.raw_data[6:self.length])
+                    length
+                    #self.packets.append(LiteralPacket(packet_version, new_packet))
+
+
+            
+
+def extract_data(first_packet):
+    '''Extract all data from first packet.
 
     Args:
         packet: binary number as string
     Returns:
-        Dictionary of dictionaries. Depth of a packet is a key, dictionary of packet as value. Dictionaries that are nested use packet order as key.
+        Packet of given type. Operator packets contain other packets.
     '''
 
-    packet_dict = {}
-
-    while packet_queue:
-        depth, order, read_type, read_count, packet = packet_queue.pop(0)
+    packet_version, packet_type = get_packet_info(first_packet)
+    
+    if packet_type == 4:
+        packet_data = first_packet[6:]
+        return LiteralPacket(packet_version, packet_data)
+    else:
+        length_type = packet[7]
+        length_bits = 15 if length_type == '0' else 11
+        length = int(packet[8:8 + length_bits], 2)
         
-        packet_version = int(packet[:3], 2)
-        
-
-        if packet_type == 4:
-            data_length, literal = read_literals(packet)
-            packet_dict[depth] = {order: (packet_version, packet_type, literal)}
-
-            if data_length < packetpacket[6:6+data_length] == '1'*data_length:
-                packet_queue.append((depth+1, order, packet[6+data_length:]))
-        elif packet_type != 4:
-            length_type = packet[7]
-            length = 15 if length_type == '0' else 11
-
-            if length == 15:
-                packet_length = int(packet[8:length], 2)
-
-            else:
-                packet_count = int(packet[8:length], 2)
-
-
-
-    print(packet_dict)
-
-        
-
-
+        return OperatorPacket(packet_version, packet_type, length_type, length, packet[8 + length_bits:])
 
 # Part 1
-packet = LiteralPacket(5, packet[6:])
-print('Part 1:', str(packet))
+packet = OperatorPacket(version, packet_type, length_type, length, packet)
+print('Part 1:', )
